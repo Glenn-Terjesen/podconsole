@@ -1,0 +1,26 @@
+#!/bin/bash
+NAMESPACES=$(kubectl get ns --no-headers -o custom-columns=":metadata.name")
+select NAMESPACE in $NAMESPACES;
+do
+    echo "Namespace selected: $NAMESPACE"
+    break;
+done
+ALL=$(kubectl get pods -n $NAMESPACE --no-headers -o custom-columns=":metadata.name" --field-selector=status.phase=="Running")
+select PODNAME in $ALL;
+do
+    echo "Pod selected: $PODNAME"
+    break;
+done
+CONTAINERS=$(kubectl get pods -n $NAMESPACE $PODNAME -o jsonpath='{.spec.containers[*].name}')
+if [ `echo $CONTAINERS | wc -w` == 1 ]
+then
+    CONTAINER=$CONTAINERS
+else
+    select CONTAINER in $CONTAINERS;
+    do
+        echo "Container selected: $CONTAINER"
+        break;
+    done
+fi
+echo "Entering $PODNAME,$CONTAINER with sh"
+kubectl exec -n $NAMESPACE --stdin --tty $PODNAME -c $CONTAINER -- /bin/sh
