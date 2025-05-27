@@ -4,19 +4,16 @@ set -o errexit
 set -o pipefail
 IFS=$'\n\t'
 
-NAMESPACES=$(kubectl get ns --no-headers -o custom-columns=":metadata.name")
-NAMESPACE=$(echo "$NAMESPACES" | fzf)
-echo "Namespace selected: $NAMESPACE"
-ALL_PODS=$(kubectl get pods -n "$NAMESPACE" --no-headers -o custom-columns=":metadata.name" --field-selector=status.phase=="Running")
-PODNAME=$(echo "$ALL_PODS" | fzf)
-echo "Selected pod: $PODNAME"
-CONTAINERS=$(kubectl get pods -n "$NAMESPACE" "$PODNAME" -o jsonpath='{.spec.containers[*].name}'|sed 's/ /\n/g')
-if [ "$(echo "$CONTAINERS"|wc -w|xargs)" == 1 ]
+if ! command -v fzf &>/dev/null
 then
-    CONTAINER=$CONTAINERS
-else
-    CONTAINER=$(echo "$CONTAINERS" | fzf)
-    echo "Container selected: $CONTAINER"
+    echo "fzf could not be found, please install fzf"
+    exit 1
 fi
-echo "Entering $PODNAME,$CONTAINER with sh"
-kubectl exec -n "$NAMESPACE" --stdin --tty "$PODNAME" -c "$CONTAINER" -- /bin/sh
+
+namespace=$(kubectl get ns --no-headers -o custom-columns=":metadata.name" | fzf)
+echo "Namespace selected: $namespace"
+podname=$(kubectl get pods -n "$namespace" --no-headers -o custom-columns=":metadata.name" --field-selector=status.phase=="Running" | fzf)
+echo "Selected pod: $podname"
+container=$(kubectl get pods -n "$namespace" "$podname" -o jsonpath='{.spec.containers[*].name}' | sed 's/ /\n/g' | fzf)
+echo "Entering $podname,$container with sh"
+kubectl exec -n "$namespace" --stdin --tty "$podname" -c "$container" -- /bin/sh
