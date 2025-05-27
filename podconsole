@@ -1,27 +1,22 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -o nounset
+set -o errexit
+set -o pipefail
+IFS=$'\n\t'
+
 NAMESPACES=$(kubectl get ns --no-headers -o custom-columns=":metadata.name")
-select NAMESPACE in $NAMESPACES;
-do
-    echo "Namespace selected: $NAMESPACE"
-    break;
-done
-ALL_NAMESPACES=$(kubectl get pods -n "$NAMESPACE" --no-headers -o custom-columns=":metadata.name" --field-selector=status.phase=="Running")
-select PODNAME in $ALL_NAMESPACES;
-do
-    echo "Pod selected: $PODNAME"
-    break;
-done
-CONTAINERS=$(kubectl get pods -n "$NAMESPACE" "$PODNAME" -o jsonpath='{.spec.containers[*].name}')
+NAMESPACE=$(echo "$NAMESPACES" | fzf)
+echo "Namespace selected: $NAMESPACE"
+ALL_PODS=$(kubectl get pods -n "$NAMESPACE" --no-headers -o custom-columns=":metadata.name" --field-selector=status.phase=="Running")
+PODNAME=$(echo "$ALL_PODS" | fzf)
+echo "Selected pod: $PODNAME"
+CONTAINERS=$(kubectl get pods -n "$NAMESPACE" "$PODNAME" -o jsonpath='{.spec.containers[*].name}'|sed 's/ /\n/g')
 if [ "$(echo "$CONTAINERS"|wc -w|xargs)" == 1 ]
 then
     CONTAINER=$CONTAINERS
 else
-    select CONTAINER in $CONTAINERS;
-    do
-	(( COUNTER++ ))
-        echo "Container selected: $CONTAINER"
-        break;
-    done
+    CONTAINER=$(echo "$CONTAINERS" | fzf)
+    echo "Container selected: $CONTAINER"
 fi
 echo "Entering $PODNAME,$CONTAINER with sh"
 kubectl exec -n "$NAMESPACE" --stdin --tty "$PODNAME" -c "$CONTAINER" -- /bin/sh
